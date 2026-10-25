@@ -47,6 +47,17 @@ jobs:
                           '3c9a05e80a9fa92fdbb0e7fe12448f47663b29d0', 'HEAD'], check=True)
           print(f'Verified {checked} unchanged branch/tag refs and both original histories.')
           PY
+          # These temporary branches imported historical workflow versions through
+          # the connector with workflow-write permission. Keep only the original tags.
+          for name in amethyst-legacy-0 edelweiss v3.2.0-release v3.2.0-testing v3.2.0-testing4 v3.2.0-testing5 v3.2.0-testing6 v3.3.0-testing v3.3.1-release v3.3.1.1; do
+            ref="refs/heads/import/tag-history/$name"
+            actual="$(git ls-remote origin "$ref" | cut -f1)"
+            expected="$(git rev-parse "$name^{}")"
+            if [ -n "$actual" ]; then
+              test "$actual" = "$expected"
+              git push origin --delete "import/tag-history/$name"
+            fi
+          done
           {
             echo "Upstream branches: $(git for-each-ref refs/remotes/upstream/ --format='%(refname)' | wc -l)"
             echo "Imported tags: $(git tag --list | wc -l)"
