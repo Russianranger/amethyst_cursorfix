@@ -1,77 +1,30 @@
-name: Import upstream history
+name: Verify history import and sync tags
 on:
   workflow_dispatch:
 permissions:
   contents: write
-concurrency:
-  group: import-upstream
-  cancel-in-progress: false
 jobs:
-  import:
-    if: github.repository == 'Russianranger/amethyst_cursorfix' && github.ref == 'refs/heads/main'
+  verify:
+    if: github.repository == 'Russianranger/amethyst_cursorfix' && github.ref == 'refs/heads/v3_openjdk'
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Import all upstream branches and tags without rewriting destination history
+      - name: Verify imported branches and import original upstream tag objects
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git remote get-url origin)" = "https://github.com/Russianranger/amethyst_cursorfix"
-          # A one-time import: refuse to overwrite any already populated branch.
-          if git ls-remote --heads origin | cut -f2 | grep -v '^refs/heads/main$'; then
-            echo "Destination already has additional branches; inspect before continuing." >&2
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/AngelAuraMC/Amethyst-Android.git
           git remote set-url --push upstream DISABLED
-          git fetch --no-recurse-submodules upstream '+refs/heads/*:refs/remotes/upstream/*' 'refs/tags/*:refs/tags/*'
-          test "$(git rev-parse upstream/v3_openjdk)" = "330c6eae3164df64bdc4828e946a9e62cc5169e4"
-          git show origin/main:LICENSE > /tmp/destination-initial-license.txt
-          git switch -c v3_openjdk upstream/v3_openjdk
-          # Preserve both histories and keep upstream's original license in place.
-          git merge --no-commit --allow-unrelated-histories -X ours origin/main
-          mkdir -p docs/import
-          cp /tmp/destination-initial-license.txt docs/import/DESTINATION-INITIAL-LICENSE.txt
-          cat > docs/import/UPSTREAM.md <<'EOF'
-          # Independent Amethyst source import
-          
-          Imported on 2026-10-25 from https://github.com/AngelAuraMC/Amethyst-Android.
-          Upstream default branch: v3_openjdk.
-          Exact baseline: 330c6eae3164df64bdc4828e946a9e62cc5169e4.
-          
-          All advertised upstream branches and tags, with their complete reachable Git
-          history, are imported. The original destination main history is retained as
-          a merge parent. Its initial GPL license is retained separately here; the
-          upstream LICENSE and bundled attribution files remain unchanged.
-          
-          Submodule URLs and gitlinks remain unchanged. HTTPS translation of the
-          androidnsbypass SSH URL is only a checkout setting. No LFS pointers were
-          found by git lfs ls-files --all during the local source inspection.
-          
-          origin is Russianranger/amethyst_cursorfix; upstream is fetch-only.
-          This workflow pushes with the repository GITHUB_TOKEN so imported refs
-          do not trigger separate push builds. Run the debug workflow separately
-          after selecting v3_openjdk as the default branch and applying the fix.
-          EOF
-          git add LICENSE docs/import
-          git commit -m "Import Amethyst history while preserving destination initial commit"
-          while IFS= read -r ref; do
-            branch="${ref#refs/remotes/upstream/}"
-            if [ "$branch" != "v3_openjdk" ] && [ "$branch" != "HEAD" ]; then
-              git branch "$branch" "$ref"
-            fi
-          done < <(git for-each-ref --format='%(refname)' refs/remotes/upstream/)
+          git fetch --no-recurse-submodules upstream 'refs/heads/*:refs/remotes/upstream/*' 'refs/tags/*:refs/tags/*'
+          test "$(git rev-parse upstream/v3_openjdk)" = 330c6eae3164df64bdc4828e946a9e62cc5169e4
           git lfs ls-files --all > /tmp/lfs-files.txt
           if [ -s /tmp/lfs-files.txt ]; then
             git lfs fetch --all upstream
             git lfs push --all origin
           fi
-          git push --atomic origin --all
           git push --atomic origin --tags
           git ls-remote --heads --tags origin > /tmp/destination-refs.txt
           python3 - <<'PY'
@@ -89,14 +42,13 @@ jobs:
               assert remote.get(target) == sha, (target, sha, remote.get(target))
               checked += 1
           subprocess.run(['git', 'merge-base', '--is-ancestor',
-                          'upstream/v3_openjdk', 'v3_openjdk'], check=True)
+                          'upstream/v3_openjdk', 'HEAD'], check=True)
           subprocess.run(['git', 'merge-base', '--is-ancestor',
-                          'origin/main', 'v3_openjdk'], check=True)
-          print(f'Verified {checked} unchanged branch/tag refs and both merge ancestries.')
+                          '3c9a05e80a9fa92fdbb0e7fe12448f47663b29d0', 'HEAD'], check=True)
+          print(f'Verified {checked} unchanged branch/tag refs and both original histories.')
           PY
           {
-            echo "Imported upstream base: 330c6eae3164df64bdc4828e946a9e62cc5169e4"
-            echo "Destination integration commit: $(git rev-parse v3_openjdk)"
             echo "Upstream branches: $(git for-each-ref refs/remotes/upstream/ --format='%(refname)' | wc -l)"
             echo "Imported tags: $(git tag --list | wc -l)"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "Complete imported history and destination initial commit verified."
+          } >> "$GITHUB_STEP_SUMMARY"

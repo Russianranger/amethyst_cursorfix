@@ -12,6 +12,8 @@ on:
 
 jobs:
   build:
+    # This independent repository uses the debug-only workflow without release secrets.
+    if: github.repository == 'AngelAuraMC/Amethyst-Android'
     runs-on: ubuntu-22.04
     env:
       GPLAY_KEYSTORE_PASSWORD: ${{ secrets.GPLAY_KEYSTORE_PASSWORD }}
