@@ -44,7 +44,7 @@ jobs:
       - name: Prepare the pinned Android toolchain and language list
         run: |
           set -euo pipefail
-          sdkmanager 'platforms;android-37' 'ndk;27.3.13750724'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37' 'ndk;27.3.13750724'
           ./scripts/languagelist_updater.sh
           mkdir -p out
           git diff --check
